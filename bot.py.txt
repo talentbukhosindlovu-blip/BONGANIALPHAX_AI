@@ -1,0 +1,394 @@
+import os
+import sys
+import math
+import asyncio
+import logging
+import requests
+import numpy as np
+import scipy.optimize as optimize
+from datetime import datetime, timezone
+from typing import Dict, Any, List, Tuple, Optional
+
+# =========================================================================
+# ?? BONGANI ALPHAX v5.4 - USER CONTROL PANEL (YOUR ONLY WORK!)
+# =========================================================================
+
+# 1. TYPE THE EXACT CASH AMOUNT YOU WANT TO MAKE TODAY IN RANDS (ZAR)
+DAILY_PROFIT_TARGET_RANDS = 200    # Change this to 150, 300, 500, 1000 etc.
+
+# 2. TYPE YOUR EXACT STARTING DEPOSIT BALANCE IN RANDS (ZAR)
+STARTING_BALANCE_RANDS = 500       # Change this to match your live broker deposit
+
+# 3. SET YOUR AGGRESSIVE RISK MULTIPLIER
+# (1.0 = Safe Compounding | 5.0 = Fast Yield | 10.0 = EXTREME GAINS / BLOW RISK)
+AGGRESSIVE_RISK_MULTIPLIER = 10.0
+
+
+# =========================================================================
+# ?? SYSTEM METRIC LOGGING PLATFORM INITIALIZATION
+# =========================================================================
+class InstitutionalFormatter(logging.Formatter):
+    def format(self, record):
+        record.system_stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        return super().format(record)
+
+logger = logging.getLogger("BonganiAlphaX_AI")
+logger.setLevel(logging.INFO)
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(
+    InstitutionalFormatter('%(system_stamp)s - [%(levelname)s] - %(message)s')
+)
+logger.addHandler(console_handler)
+
+
+# =========================================================================
+# ?? AUTOMATED INSTITUTIONAL MATH FILTER ENGINE
+# =========================================================================
+class InstitutionalSignalProcessor:
+    def __init__(self, watchlist: List[str]):
+        self.cached_garch_vols: Dict[str, float] = {}
+        self.last_garch_times: Dict[str, datetime] = {}
+        for symbol in watchlist:
+            self.cached_garch_vols[symbol] = (
+                0.550 if "BTC" in symbol else
+                (0.224 if "XAU" in symbol else 0.125)
+            )
+            self.last_garch_times[symbol] = datetime.min.replace(
+                tzinfo=timezone.utc
+            )
+
+    @staticmethod
+    def execute_kalman_filter(
+        observed_mid: float,
+        state_x: float,
+        covariance_P: float
+    ) -> Tuple[float, float]:
+        """Isolates true asset price vectors from market microstructure variance."""
+        if math.isnan(observed_mid) or observed_mid <= 0:
+            return state_x, covariance_P
+        if state_x == 0.0:
+            return observed_mid, 1.0
+
+        prior_x, prior_P = state_x, covariance_P + 1e-6
+        innovation = observed_mid - prior_x
+        innovation_cov = prior_P + 5e-3
+        kalman_gain = prior_P / innovation_cov
+
+        return (
+            float(prior_x + (kalman_gain * innovation)),
+            float((1.0 - kalman_gain) * prior_P)
+        )
+
+    def compute_mle_garch_volatility(
+        self,
+        symbol: str,
+        historical_prices: List[float]
+    ) -> float:
+        """Executes a background MLE solver on a 1-hour cache layer to prevent execution lag."""
+        now = datetime.now(timezone.utc)
+
+        if (now - self.last_garch_times[symbol]).total_seconds() < 3600:
+            return self.cached_garch_vols[symbol]
+
+        n_samples = len(historical_prices)
+        if n_samples < 30:
+            return self.cached_garch_vols[symbol]
+
+        returns = np.diff(np.log(np.array(historical_prices)))
+        returns = returns - np.mean(returns)
+
+        def _garch_nll_objective(params: np.ndarray) -> float:
+            omega, alpha, beta = params
+            penalty = 0.0
+
+            if omega <= 1e-9:
+                penalty += (1e-9 - omega) * 1e7
+                omega = 1e-9
+
+            if alpha < 0.0:
+                penalty += abs(alpha) * 1e7
+                alpha = 0.0
+
+            if beta < 0.0:
+                penalty += abs(beta) * 1e7
+                beta = 0.0
+
+            if (alpha + beta) >= 0.999:
+                excess = (alpha + beta) - 0.999
+                penalty += excess * 1e7
+                scale = 0.999 / (alpha + beta)
+                alpha *= scale
+                beta *= scale
+
+            t = len(returns)
+            variance = np.zeros(t)
+            variance = np.var(returns)
+
+            for i in range(1, t):
+                variance[i] = (
+                    omega +
+                    alpha * (returns[i - 1] ** 2) +
+                    beta * variance[i - 1]
+                )
+                if variance[i] <= 0:
+                    variance[i] = 1e-9
+
+            neg_log_likelihood = -0.5 * np.sum(
+                np.log(2 * np.pi * variance) +
+                (returns ** 2) / variance
+            )
+
+            return float(-neg_log_likelihood + penalty)
+
+        try:
+            res = optimize.minimize(
+                _garch_nll_objective,
+                np.array([1e-6, 0.05, 0.90]),
+                bounds=(
+                    (1e-9, 1e-4),
+                    (1e-4, 0.25),
+                    (0.70, 0.98)
+                ),
+                method="L-BFGS-B"
+            )
+
+            if res.success:
+                self.cached_garch_vols[symbol] = float(
+                    np.sqrt(
+                        max(
+                            1e-8,
+                            res.x +
+                            res.x * (returns[-1] ** 2) +
+                            res.x * np.var(returns)
+                        )
+                    ) * np.sqrt(252)
+                )
+                self.last_garch_times[symbol] = now
+
+        except Exception:
+            pass
+
+        return self.cached_garch_vols[symbol]
+
+
+# =========================================================================
+# ?? CORE DUAL-ENGINE CONVERGENCE
+# =========================================================================
+class QuantitativeEngineA:
+    @staticmethod
+    def evaluate_signal(
+        bid: float,
+        smoothed_mean: float,
+        symbol: str
+    ) -> str:
+        threshold_pct = (
+            0.0050 if "BTC" in symbol else
+            (0.0012 if "XAU" in symbol else 0.0004)
+        )
+
+        upper_barrier = smoothed_mean * (1.0 + threshold_pct)
+        lower_barrier = smoothed_mean * (1.0 - threshold_pct)
+
+        if bid > upper_barrier:
+            return "SELL"
+        elif bid < lower_barrier:
+            return "BUY"
+
+        return "HOLD"
+
+
+class QuantitativeEngineB:
+    @staticmethod
+    def evaluate_signal(price_history: List[float]) -> str:
+        if len(price_history) < 10:
+            return "HOLD"
+
+        short_sma = np.mean(price_history[-5:])
+        long_sma = np.mean(price_history[-10:])
+
+        return (
+            "BUY" if short_sma > long_sma
+            else ("SELL" if short_sma < long_sma else "HOLD")
+        )
+
+
+# =========================================================================
+# ?? OUTBOUND TELEMETRY GATEWAY
+# =========================================================================
+class Telemetry:
+    @staticmethod
+    def send_whatsapp(
+        sid: str,
+        token: str,
+        twilio_num: str,
+        target_num: str,
+        msg: str
+    ):
+        if "YOUR_TWILIO" in sid or not sid:
+            return
+
+        url = f"https://twilio.com{sid}/Messages.json"
+
+        payload = {
+            "From": f"whatsapp:{twilio_num}",
+            "To": f"whatsapp:{target_num}",
+            "Body": f"?? *BONGANI ALPHAX V5.4* ??\n\n{msg}"
+        }
+
+        try:
+            requests.post(
+                url,
+                data=payload,
+                auth=(sid, token),
+                timeout=4.5
+            )
+        except Exception:
+            pass
+
+
+# =========================================================================
+# ?? HIGH-PERFORMANCE UNIFIED EXECUTION ENGINE CORE
+# =========================================================================
+class BonganiAlphaXAIUnified:
+    def __init__(self):
+        self.system_id = "BONGANI ALPHAX AI v5.4 [REVOLUTION PRODUCTION CORE]"
+
+        # Security Environment Variable Bridges
+        self.metaapi_token = os.environ.get(
+            "METAAPI_TOKEN",
+            "YOUR_METAAPI_ACCESS_TOKEN"
+        )
+        self.account_id = os.environ.get(
+            "METAAPI_ACCOUNT_ID",
+            "YOUR_XM_MT5_ID"
+        )
+        self.twilio_sid = os.environ.get(
+            "TWILIO_ACCOUNT_SID",
+            "YOUR_TWILIO_ACCOUNT_SID"
+        )
+        self.twilio_token = os.environ.get(
+            "TWILIO_AUTH_TOKEN",
+            "YOUR_TWILIO_AUTH_TOKEN"
+        )
+        self.twilio_num = os.environ.get(
+            "TWILIO_WHATSAPP_NUMBER",
+            "+14155238886"
+        )
+        self.my_num = os.environ.get(
+            "BONGANIS_WHATSAPP_NUMBER",
+            "+27717912513"
+        )
+
+        # ?? SAVED XM MICRO WATCHLIST FROM YOUR APPS SCREENSHOT
+        self.watchlist = [
+            "BTCUSDm",
+            "EURUSDm",
+            "USDJPYm",
+            "USDCADm",
+            "EURJPYm",
+            "NZDCADm",
+            "GBPUSDm",
+            "XAUUSDm"
+        ]
+
+        self.max_spreads = {
+            "BTCUSDm": 1200.0,
+            "EURUSDm": 10.0,
+            "USDJPYm": 12.0,
+            "USDCADm": 16.0,
+            "EURJPYm": 18.0,
+            "NZDCADm": 20.0,
+            "GBPUSDm": 12.0,
+            "XAUUSDm": 250.0
+        }
+
+        self.system_lockdown = False
+        self.initial_daily_equity = 0.0
+
+        # State tracking dictionaries mapped across assets
+        self.price_histories: Dict[str, List[float]] = {
+            symbol: [] for symbol in self.watchlist
+        }
+
+        self.kalman_states: Dict[str, float] = {
+            symbol: 0.0 for symbol in self.watchlist
+        }
+
+        self.kalman_covariances: Dict[str, float] = {
+            symbol: 1.0 for symbol in self.watchlist
+        }
+
+        self.processor = InstitutionalSignalProcessor(self.watchlist)
+
+    async def execute_tick_pipeline(
+        self,
+        symbol: str,
+        live_bid: float,
+        live_ask: float,
+        current_equity: float
+    ):
+        if self.system_lockdown:
+            return
+
+        if self.initial_daily_equity == 0.0:
+            self.initial_daily_equity = current_equity
+
+        # Live Rand profit tracking metrics
+        current_daily_profit = (
+            current_equity - self.initial_daily_equity
+        )
+
+        # Safety Catch 1: Dynamic Capital Preservation Guard
+        # (Prevents complete balance wiping)
+        if current_equity <= (STARTING_BALANCE_RANDS * 0.15):
+            self.system_lockdown = True
+
+            msg = (
+                f"?? CRITICAL EMERGENCY BLOCK: "
+                f"Account reached structural safety floor "
+                f"(R{current_equity:.2f}). "
+                f"Trading halted to preserve remaining balance."
+            )
+
+            logger.critical(msg)
+
+            Telemetry.send_whatsapp(
+                self.twilio_sid,
+                self.twilio_token,
+                self.twilio_num,
+                self.my_num,
+                msg
+            )
+            return
+
+        # Safety Catch 2: Your Custom Daily Cash Target Rule
+        # (Locks in Profits)
+        if current_daily_profit >= DAILY_PROFIT_TARGET_RANDS:
+            self.system_lockdown = True
+
+            msg = (
+                f"?? TARGET ACHIEVED! "
+                f"Your daily profit goal of "
+                f"R{DAILY_PROFIT_TARGET_RANDS} "
+                f"has been reached! "
+                f"Current profit: "
+                f"R{current_daily_profit:.2f}. "
+                f"System paused to protect your gains."
+            )
+
+            logger.info(msg)
+
+            Telemetry.send_whatsapp(
+                self.twilio_sid,
+                self.twilio_token,
+                self.twilio_num,
+                self.my_num,
+                msg
+            )
+            return
+
+        # Store distinct asset vectors
+        self.price_histories[symbol].append(live_bid)
+
+        if len(self.price_histories[symbol]) > 100:
+            self.price_histories[symbol].pop(0)
