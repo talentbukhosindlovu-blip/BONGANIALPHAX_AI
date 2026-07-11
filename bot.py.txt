@@ -13,15 +13,15 @@ from typing import Dict, Any, List, Tuple, Optional
 # ?? BONGANI ALPHAX v5.4 - USER CONTROL PANEL (YOUR ONLY WORK!)
 # =========================================================================
 
-# 1. TYPE THE EXACT CASH AMOUNT YOU WANT TO MAKE TODAY IN RANDS (ZAR)
-DAILY_PROFIT_TARGET_RANDS = 200    # Change this to 150, 300, 500, 1000 etc.
+# 1. TYPE THE EXACT CASH AMOUNT YOU WANT TO MAKE TODAY IN UD DOLLAR (USD)
+DAILY_PROFIT_TARGET_USD = 5.0     # Change this to 150, 300, 500, 1000 etc.
 
-# 2. TYPE YOUR EXACT STARTING DEPOSIT BALANCE IN RANDS (ZAR)
-STARTING_BALANCE_RANDS = 500       # Change this to match your live broker deposit
+# 2. TYPE YOUR EXACT STARTING DEPOSIT BALANCE IN US DOLLAR (USD)
+STARTING_BALANCE_RANDS = 42.68      # Change this to match your live broker deposit
 
 # 3. SET YOUR AGGRESSIVE RISK MULTIPLIER
 # (1.0 = Safe Compounding | 5.0 = Fast Yield | 10.0 = EXTREME GAINS / BLOW RISK)
-AGGRESSIVE_RISK_MULTIPLIER = 10.0
+AGGRESSIVE_RISK_MULTIPLIER = 2.0
 
 
 # =========================================================================
