@@ -13,14 +13,11 @@ from typing import Dict, Any, List, Tuple, Optional
 # ?? BONGANI ALPHAX v5.4 - USER CONTROL PANEL (YOUR ONLY WORK!)
 # =========================================================================
 
-# 1. TYPE THE EXACT CASH AMOUNT YOU WANT TO MAKE TODAY
-DAILY_PROFIT_TARGET_RANDS = 90.0     # This is your ~R90 ZAR daily target
+DAILY_PROFIT_TARGET_RANDS = 5.0     # Dropping target to a tiny R5 ZAR
+STARTING_BALANCE_RANDS = 43.0       # Changing balance to your new R43 ZAR ($2.68)
+AGGRESSIVE_RISK_MULTIPLIER = 0.1    # Dropping risk to the absolute minimum possible
 
-# 2. TYPE YOUR EXACT STARTING DEPOSIT BALANCE
-STARTING_BALANCE_RANDS = 700.0       # This is your ~R700 ZAR total trading pool
 
-# 3. SET YOUR AGGRESSIVE RISK MULTIPLIER
-AGGRESSIVE_RISK_MULTIPLIER = 2.0     # Keeping risk safe and low
 
 # =========================================================================
 # ?? SYSTEM METRIC LOGGING PLATFORM INITIALIZATION
