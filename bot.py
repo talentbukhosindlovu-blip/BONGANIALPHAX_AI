@@ -13,11 +13,9 @@ from typing import Dict, Any, List, Tuple, Optional
 # ?? BONGANI ALPHAX v5.4 - USER CONTROL PANEL (YOUR ONLY WORK!)
 # =========================================================================
 
-DAILY_PROFIT_TARGET_RANDS = 5.0     # Dropping target to a tiny R5 ZAR
-STARTING_BALANCE_RANDS = 43.0       # Changing balance to your new R43 ZAR ($2.68)
-AGGRESSIVE_RISK_MULTIPLIER = 0.1    # Dropping risk to the absolute minimum possible
-
-
+DAILY_PROFIT_TARGET_RANDS = 90.0     # Target ~R90 ZAR daily target ($5)
+STARTING_BALANCE_RANDS = 700.0       # Your full R700 ZAR balance pool ($42.68)
+AGGRESSIVE_RISK_MULTIPLIER = 2.0     # Restoring risk multiplier back to normal
 
 # =========================================================================
 # ?? SYSTEM METRIC LOGGING PLATFORM INITIALIZATION
